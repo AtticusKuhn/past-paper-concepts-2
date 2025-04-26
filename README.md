@@ -4,7 +4,7 @@ A system for analyzing University of Cambridge Computer Science Tripos past pape
 
 ## Goal
 
-The primary goal is to build a structured database of concepts frequently appearing in CS Tripos papers (Parts IA, IB, and II). This aims to help current Cambridge Computer Science undergraduate students identify recurring topics and optimize their revision strategy.
+The primary goal is to build a structured database of concepts frequently appearing in CS Tripos papers (Parts IA, IB, and II). This aims to help current Cambridge Computer Science undergraduate students identify recurring topics, understand relationships between concepts, and optimize their revision strategy.
 
 The system will process official solutions PDFs (which typically include the questions) downloaded from the Computer Laboratory website (`cl.cam.ac.uk`). It will use a Vision Language Model (LLM), such as GPT-4o, to identify and extract key concepts from each question's solution.
 
@@ -12,80 +12,73 @@ The system will process official solutions PDFs (which typically include the que
 
 *   **Automated Downloading:** Capability to download specific past paper solutions PDFs from the CL website (requires user authentication cookie).
 *   **Concept Extraction:** Utilizes Vision LLMs to analyze PDFs and extract relevant computer science concepts.
-*   **Structured Storage:** Stores extracted concepts and associated metadata in a queryable database.
+*   **Structured Storage:** Stores extracted concepts and associated metadata in a queryable graph database.
 *   **Subject Organization:** Keeps data organized by paper, question, year, and potentially the corresponding course module.
+*   **Data Visualization:** Offers various ways to visualize the relationships and trends within the extracted data.
 
 ## How it Works
 
 1.  **Download:** The tool fetches specified solutions PDFs from the CL website, using a user-provided authentication cookie for access.
 2.  **Process:** Each PDF is sent to a Vision LLM.
 3.  **Extract:** The LLM is prompted to identify and list the key concepts covered in each question/solution.
-4.  **Store:** The extracted concepts, along with metadata, are stored in a database.
+4.  **Store:** The extracted concepts, along with metadata, are stored in a graph database.
+5.  **Visualize:** The tool provides interfaces or generates outputs for visualizing the stored graph data.
 
 ## Database Schema
 
-The relationship between concepts and questions is many-to-many. The database schema needs to reflect this. Below are potential structures for relational (SQLite) and graph databases.
+A **Graph Database** architecture has been chosen to effectively model the many-to-many relationships between concepts and questions, and to facilitate complex queries and visualizations.
 
-**Option 1: Relational Database (e.g., SQLite)**
-
-This approach uses multiple tables linked by foreign keys.
-
-*   **`Papers` Table:** Stores information about each exam paper.
-    *   `paper_id` (Primary Key)
-    *   `paper_code` (e.g., "2022-p06", Unique)
-    *   `year` (e.g., 2022)
-    *   `tripos_part` (e.g., "IB")
-*   **`Questions` Table:** Stores information about each question within a paper.
-    *   `question_id` (Primary Key)
-    *   `paper_id` (Foreign Key referencing `Papers.paper_id`)
-    *   `question_number` (e.g., "q01")
-    *   `course_module` (Optional/Best Effort, e.g., "Algorithms")
-*   **`Concepts` Table:** Stores unique concepts identified across all papers.
-    *   `concept_id` (Primary Key)
-    *   `concept_name` (Canonical name, e.g., "Binary Search Tree", Unique)
-    *   `concept_definition` (Optional, LLM-generated or curated definition)
-*   **`QuestionConcepts` Table (Join Table):** Links questions to the concepts they cover.
-    *   `question_id` (Foreign Key referencing `Questions.question_id`)
-    *   `concept_id` (Foreign Key referencing `Concepts.concept_id`)
-    *   *(Composite Primary Key: (`question_id`, `concept_id`))*
-    *   *(Optional: Store context-specific details here if needed)*
-
-**Option 2: Graph Database (e.g., Neo4j, NetworkX)**
-
-This approach models entities as nodes and relationships as edges.
+The schema models entities as nodes and relationships as edges:
 
 *   **Nodes:**
-    *   `Paper` (Properties: `paper_code`, `year`, `tripos_part`)
-    *   `Question` (Properties: `question_number`, `course_module`)
-    *   `Concept` (Properties: `name`, `definition`)
+    *   `Paper` (Properties: `paper_code` [Unique], `year`, `tripos_part`)
+    *   `Question` (Properties: `question_number`, `course_module` [Optional])
+    *   `Concept` (Properties: `name` [Unique, Canonical], `definition` [Optional])
 *   **Relationships:**
-    *   `(:Question)-[:PART_OF]->(:Paper)`
-    *   `(:Question)-[:MENTIONS]->(:Concept)` (or `(:Concept)-[:APPEARS_IN]->(:Question)`)
+    *   `(:Question)-[:PART_OF]->(:Paper)`: Connects a question to the specific paper it belongs to.
+    *   `(:Question)-[:MENTIONS]->(:Concept)`: Connects a question to a concept it covers. (Alternatively, `(:Concept)-[:APPEARS_IN]->(:Question)`)
 
-**Choice of Technology:**
+**Technology Choice Rationale:**
 
-*   **SQLite:** Simple, portable, file-based, good for straightforward querying. Requires careful schema design for relationships.
-*   **Graph Database:** Excellent for visualizing and querying complex relationships between concepts, papers, and courses. Might have a steeper learning curve or require more setup (e.g., Neo4j server).
+*   **Graph Database:** Chosen for its strength in representing and querying interconnected data. This structure is ideal for exploring how concepts relate to each other across different papers, questions, and potentially courses. It also opens up possibilities for visualizing the concept landscape.
+*   **Potential Backends:** While a specific backend isn't finalized, options include:
+    *   **Neo4j:** A popular, robust graph database server. Interaction would likely be via the official Python driver.
+    *   **NetworkX:** A Python library for graph manipulation. Could be used for simpler, in-memory graph analysis or as an intermediate step, potentially persisting the graph to a file format.
 
-The final choice will depend on the desired query complexity and visualization needs.
+The final backend choice will depend on scalability requirements and the complexity of desired queries and visualizations.
+
+## Visualization Possibilities
+
+The graph structure enables several insightful visualizations:
+
+*   **Concept Co-occurrence Network:** Visualize which concepts frequently appear together in the same questions. Edges can be weighted by co-occurrence frequency, revealing clusters of related topics.
+*   **Concept Frequency Trends:** Track how often concepts appear over different exam years using line charts or bar charts, highlighting enduring themes and changing focus areas.
+*   **Paper/Course Concept Maps:** Generate graphs showing the key concepts covered in a specific paper or course module, providing a focused overview.
+*   **Interactive Exploration:** Allow users to dynamically explore the full graph using interactive tools (potentially web-based), enabling filtering, zooming, and discovering connections on their own.
+
+**Potential Visualization Tools:**
+
+*   **Python Libraries:** `Matplotlib`, `Seaborn` (for static charts), `NetworkX` (for graph structure analysis and basic plotting), `pyvis` (for interactive NetworkX graphs in HTML).
+*   **Graph Database Tools:** Neo4j Browser, Neo4j Bloom (for interactive exploration if using Neo4j).
+*   **Web Technologies:** Frameworks like Flask/Django combined with JavaScript libraries (e.g., D3.js, Sigma.js) for custom, interactive web-based visualizations.
 
 ## Difficult Issues / Challenges
 
 These are key challenges anticipated during development:
 
-*   **Concept Canonicalization:** Ensuring consistent naming for the same concept (`concept_name` in `Concepts` table or `name` property on `Concept` node) across different papers and questions is crucial. For example, the LLM might extract "Bellman-Ford" from one paper and "Bellman-Ford-Moore algorithm" from another. Potential strategies include:
+*   **Concept Canonicalization:** Ensuring consistent naming (`name` property on `Concept` node) for the same concept across different papers and questions is crucial. For example, the LLM might extract "Bellman-Ford" from one paper and "Bellman-Ford-Moore algorithm" from another. Potential strategies include:
     *   Sophisticated LLM prompting to enforce a canonical naming scheme.
     *   Post-processing steps to normalize extracted concept names (e.g., using string similarity, synonym lists, or embedding comparisons).
     *   Manual review and mapping of extracted terms.
 *   **Authentication for Downloads:** Accessing solutions PDFs requires authentication. The tool needs a secure and user-friendly way for users to provide their CL authentication cookie. The planned approach is via a configuration file (e.g., a `.env` file).
 *   **Accuracy of LLM Extraction:** The quality and relevance of extracted concepts depend heavily on the LLM's capabilities and the prompting strategy used.
-*   **Mapping Concepts to Courses:** Reliably associating extracted concepts (`course_module` in `Questions` table or property on `Question` node) with the specific course module they belong to might require additional logic or data sources.
+*   **Mapping Concepts to Courses:** Reliably associating extracted concepts (`course_module` property on `Question` node) with the specific course module they belong to might require additional logic or data sources.
 
 ## Project Status & Usage
 
 *   **Status:** Currently in the **planning and design phase**.
-*   **Language:** To be implemented in **Python**, leveraging its strong ecosystem for AI/LLM interactions and data processing.
-*   **Interface:** Planned as a **Command-Line Interface (CLI)** tool.
+*   **Language:** To be implemented in **Python**, leveraging its strong ecosystem for AI/LLM interactions, data processing, and visualization libraries.
+*   **Interface:** Planned as a **Command-Line Interface (CLI)** tool, potentially generating visualization outputs (e.g., HTML files, image files) or offering commands to launch interactive sessions.
 
 ## Setup & Authentication
 
