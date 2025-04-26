@@ -1,14 +1,33 @@
-.DS_Store
-.idea
-*.log
-tmp/
-
+# Python cache files
 *.py[cod]
+__pycache__/
+*.egg-info/
 *.egg
-build
-htmlcov
 
+# Build artifacts
+build/
+dist/
+htmlcov/
+*.log
+
+# Environment and secrets
 .env
-db/**
-pdfs/*.pdf
+.env.*
+!/.env.example
+
+# Data and downloaded files
+data/
+downloads/
+
+# IDE and OS specific files
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# Aider internal files
 .aider*
+
+# Nix files (optional, depending on workflow)
+# result
+# .direnv/

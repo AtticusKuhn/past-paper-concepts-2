@@ -1,50 +1,40 @@
-{ pkgs ? import <nixpkgs-unstable> {} }:
-with pkgs; let
-  my-python-packages = ps: with ps; [
-    # Core dependencies
-    sqlalchemy
-    pypdf2
-    pdfplumber
-    python-dotenv
-    pillow
-    
-    # Optional OCR dependencies
-    pytesseract
-    
-    # Development tools
-    pytest
-    
-    # These packages will be installed from nixpkgs
-    # rather than pip (if available)
-    langchain
-    langchain-community
-    openai
-    pdf2image
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.mkShell {
+  buildInputs = with pkgs; [
+    # Python Environment
+    python3Packages.python              # Explicitly include python interpreter
+    python3Packages.pip
+
+    # Core Libraries (using python3Packages for consistency)
+    python3Packages.requests        # For downloading PDFs
+    python3Packages.python-dotenv   # For loading .env files
+    python3Packages.networkx        # For graph manipulation
+    python3Packages.openai          # For LLM interaction (initial choice)
+
+    # Visualization
+    python3Packages.matplotlib
+    python3Packages.pyvis
+
+    # Development Tools from nixpkgs
+    black                           # Code formatter
+    ruff                            # Linter
+    git
+
+    # System dependencies (if needed by Python libs, e.g., for Pillow if used later)
+    # Example: zlib, libjpeg
+
+    # Add other development tools as needed
+    # sqlitebrowser # If you decide to use SQLite later
   ];
-  my-python = pkgs.python3.withPackages my-python-packages;
-in
-mkShell {
-  buildInputs = [
-    my-python
-    pkgs.black
-    pkgs.sqlitebrowser
-    pkgs.ruff
-    pkgs.aider-chat
-    pkgs.isort
-    
-    # System dependencies
-    tesseract    # For pytesseract
-    poppler_utils # For pdf2image
-  ];
-  
-  # Environment variables
+
   shellHook = ''
-    echo "Python development environment for Past Paper Concepts activated"
-    
-    # Make the Python interpreter available in the shell
-    export PYTHONPATH=$PYTHONPATH:$(pwd)
-    
-    # Set environment variables for OCR if needed
-    export TESSDATA_PREFIX=${pkgs.tesseract}/share/tessdata
+    echo "Entering Nix shell for Past Paper Analyzer..."
+    # Set PYTHONPATH to include the src directory
+    export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+    echo "PYTHONPATH set to: $PYTHONPATH"
+    # You could add commands here to automatically create directories if they don't exist
+    # mkdir -p data downloads
+    # echo "Ensured data/ and downloads/ directories exist."
   '';
 }
