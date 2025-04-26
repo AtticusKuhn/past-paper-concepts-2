@@ -23,12 +23,15 @@ def extract_concepts_from_pdf(pdf_path: str) -> list[dict]:
         and its context (e.g., {'concept_name': '...', 'definition': '...', 'question_context': '...'}).
         Returns an empty list if extraction fails or is not implemented.
     """
-    print(f"--- LLM Extractor Placeholder ---")
+    print("--- LLM Extractor Placeholder ---")
     print(f"Processing PDF: '{pdf_path}'")
 
     if not config.OPENAI_API_KEY:
-         print("Error: OPENAI_API_KEY not set in .env file. Cannot call LLM.", file=sys.stderr)
-         return []
+        print(
+            "Error: OPENAI_API_KEY not set in .env file. Cannot call LLM.",
+            file=sys.stderr,
+        )
+        return []
 
     # if openai is None:
     #      print("Error: OpenAI library not available.", file=sys.stderr)
@@ -98,12 +101,25 @@ def extract_concepts_from_pdf(pdf_path: str) -> list[dict]:
     # Dummy data for now:
     print("Placeholder: Returning dummy concept data.")
     dummy_concepts = [
-        {"concept_name": "Dummy Concept A", "definition": "A placeholder concept.", "question_context": "Question 1 Part A"},
-        {"concept_name": "Dummy Concept B", "definition": "Another placeholder.", "question_context": "Question 1 Part B"},
-        {"concept_name": "dummy concept a", "definition": "Duplicate placeholder.", "question_context": "Question 2"}, # Test canonicalization
+        {
+            "concept_name": "Dummy Concept A",
+            "definition": "A placeholder concept.",
+            "question_context": "Question 1 Part A",
+        },
+        {
+            "concept_name": "Dummy Concept B",
+            "definition": "Another placeholder.",
+            "question_context": "Question 1 Part B",
+        },
+        {
+            "concept_name": "dummy concept a",
+            "definition": "Duplicate placeholder.",
+            "question_context": "Question 2",
+        },  # Test canonicalization
     ]
-    print(f"--- End LLM Extractor Placeholder ---")
+    print("--- End LLM Extractor Placeholder ---")
     return dummy_concepts
+
 
 # Example usage (for direct testing):
 # if __name__ == '__main__':
@@ -119,4 +135,3 @@ def extract_concepts_from_pdf(pdf_path: str) -> list[dict]:
 #             print("No concepts returned.")
 #     else:
 #         print(f"Cannot run test: PDF '{pdf_file}' not found or config check failed.")
-

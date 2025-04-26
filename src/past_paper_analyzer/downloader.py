@@ -6,6 +6,7 @@ from . import config
 # Ensure the downloads directory exists (redundant if check_config runs first, but safe)
 os.makedirs("downloads", exist_ok=True)
 
+
 def download_pdf(year: int, paper_code: str, question_number: str) -> str | None:
     """
     Downloads a specific past paper solutions PDF from the CL website.
@@ -26,34 +27,43 @@ def download_pdf(year: int, paper_code: str, question_number: str) -> str | None
     print(f"Attempting to download: {url}")
 
     if not config.CL_AUTH_COOKIE:
-        print("Error: CL_AUTH_COOKIE is not set in the .env file. Cannot authenticate.", file=sys.stderr)
+        print(
+            "Error: CL_AUTH_COOKIE is not set in the .env file. Cannot authenticate.",
+            file=sys.stderr,
+        )
         return None
 
     # Use the cookie value directly in the Cookie header
     headers = {
-        'Cookie': f'cl_raven_auth={config.CL_AUTH_COOKIE}',
-        'User-Agent': 'PastPaperConceptAnalyzer/0.1 (Python script; contact example@example.com)' # Good practice
+        "Cookie": f"cl_raven_auth={config.CL_AUTH_COOKIE}",
+        "User-Agent": "PastPaperConceptAnalyzer/0.1 (Python script; contact example@example.com)",  # Good practice
     }
 
     try:
         # Use a session object for potential connection reuse
         with requests.Session() as session:
             session.headers.update(headers)
-            response = session.get(url, stream=True, timeout=60) # Increased timeout
+            response = session.get(url, stream=True, timeout=60)  # Increased timeout
 
             # Check status code immediately after the request
             if response.status_code == 403:
-                 print(f"Download failed: 403 Forbidden. Check your CL_AUTH_COOKIE value in .env.", file=sys.stderr)
-                 return None
+                print(
+                    "Download failed: 403 Forbidden. Check your CL_AUTH_COOKIE value in .env.",
+                    file=sys.stderr,
+                )
+                return None
             elif response.status_code == 404:
-                 print(f"Download failed: 404 Not Found. Check year ({year}), paper code ({paper_code}), and question number ({question_number}).", file=sys.stderr)
-                 return None
+                print(
+                    f"Download failed: 404 Not Found. Check year ({year}), paper code ({paper_code}), and question number ({question_number}).",
+                    file=sys.stderr,
+                )
+                return None
 
             # Raise an exception for other bad status codes (e.g., 5xx)
             response.raise_for_status()
 
             # Stream the download
-            with open(output_path, 'wb') as f:
+            with open(output_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
 
@@ -69,6 +79,7 @@ def download_pdf(year: int, paper_code: str, question_number: str) -> str | None
     except Exception as e:
         print(f"An unexpected error occurred during download: {e}", file=sys.stderr)
         return None
+
 
 # Example usage (for direct testing):
 # if __name__ == '__main__':

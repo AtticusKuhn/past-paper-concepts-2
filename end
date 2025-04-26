@@ -1,7 +1,0 @@
-
-## Critical Implementation Paths
-
-*   Reliable PDF downloading with authentication.
-*   Effective prompting strategy for the Vision LLM to extract relevant and well-formed concepts.
-*   Implementing a robust concept canonicalization strategy.
-*   Designing efficient graph database queries for the desired visualizations.
