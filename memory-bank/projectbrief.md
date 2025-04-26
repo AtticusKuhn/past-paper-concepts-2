@@ -12,3 +12,10 @@ To create a system that analyzes University of Cambridge Computer Science Tripos
 *   **Output:** Provide data and visualizations to help students identify recurring topics, understand concept relationships, and optimize revision.
 *   **Interface:** Command-Line Interface (CLI).
 *   **Target Users:** Current Cambridge Computer Science undergraduate students (all years).
+
+## Critical Implementation Paths
+
+*   Reliable PDF downloading with authentication.
+*   Effective prompting strategy for the Vision LLM to extract relevant and well-formed concepts.
+*   Implementing a robust concept canonicalization strategy.
+*   Designing efficient graph database queries for the desired visualizations.
