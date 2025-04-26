@@ -21,9 +21,8 @@
 
 ## Development Setup
 
-*   **Environment:** Python virtual environment recommended (e.g., `venv`).
-*   **Dependencies:** Managed via `requirements.txt` or potentially `pyproject.toml` (e.g., with Poetry or PDM).
-*   **Version Control:** Git.
+This project is being developed using `Nix` on `NixOs`. Any development tools should
+be placed inside `shell.nix`.
 
 ## Technical Constraints
 
