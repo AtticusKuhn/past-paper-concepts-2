@@ -11,3 +11,4 @@ htmlcov
 .env
 db/**
 pdfs/*.pdf
+.aider*
