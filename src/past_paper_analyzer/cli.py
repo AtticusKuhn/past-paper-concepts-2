@@ -177,6 +177,7 @@ def handle_process(args):
     # --- LLM Extraction ---
     print("Starting LLM concept extraction...")
     # TODO: Pass course_hint to llm_extractor if available from batch download metadata
+    # (e.g., if batch download stores this hint alongside the PDF or passes it to process)
     concepts_data = llm_extractor.extract_concepts_from_pdf(pdf_path)
     if not concepts_data:
         print("Error: No concepts extracted or LLM call failed.", file=sys.stderr)
@@ -197,18 +198,15 @@ def handle_process(args):
         tripos_part=metadata["tripos_part"],
     )
 
-    # TODO: If processing a full paper PDF, need to iterate through questions within it.
-    # The current model assumes one PDF = one question's solution, which might be incorrect
-    # for solutions PDFs that cover an entire paper.
-    # The `metadata['question_num']` might come from filename parsing (e.g. YYYY-pXX-qYY-solutions.pdf)
-    # or be a specific question if the PDF is indeed for a single question.
-    # If the PDF is for a whole paper (e.g. YYYY-pXX-solutions.pdf), then `question_num`
-    # needs to be derived during LLM extraction for each concept.
-
+    # Clarification: Each PDF (e.g., YYYY-pXX-qYY-solutions.pdf) contains the solution
+    # for a single question. Therefore, the `metadata['question_num']` obtained from
+    # filename parsing or arguments directly corresponds to the content of this PDF.
+    # No further segmentation of questions within the PDF is needed.
+    # The LLM will process the entire PDF as the solution for this one question.
     question_id = graph_store.add_question(
         graph,
         paper_node_id=paper_id,
-        question_number=metadata["question_num"], # This needs careful handling if PDF is multi-question
+        question_number=metadata["question_num"],
         course_module=args.course, # This could also come from batch file's course_hint
     )
 
