@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs-unstable> {} }:
 
 pkgs.mkShell {
   buildInputs = with pkgs; [
@@ -11,6 +11,9 @@ pkgs.mkShell {
     python3Packages.python-dotenv   # For loading .env files
     python3Packages.networkx        # For graph manipulation
     python3Packages.openai          # For LLM interaction (initial choice)
+
+    # AI coding assistant
+    aider-chat
 
     # Visualization
     python3Packages.matplotlib
