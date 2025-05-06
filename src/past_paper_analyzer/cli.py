@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 import re
-from . import config, downloader, llm_extractor, graph_store
+from . import config, downloader, llm_extractor, graph_store, batch_parser
 
 
 def parse_filename(filename: str) -> dict | None:
@@ -41,35 +41,87 @@ def parse_filename(filename: str) -> dict | None:
 
 
 def handle_download(args):
-    """Handles the 'download' command."""
+    """Handles the 'download' command for single or batch downloads."""
     print("--- Download Command ---")
-    print(f"Requesting: Year={args.year}, Paper={args.paper}, Question={args.question}")
 
-    # Basic validation of paper/question format
-    if not re.match(r"p\d{1,2}", args.paper, re.IGNORECASE):
-        print(
-            f"Error: Invalid paper format '{args.paper}'. Expected 'pXX'.",
-            file=sys.stderr,
-        )
-        return
-    if not re.match(r"q\d{1,2}", args.question, re.IGNORECASE):
-        print(
-            f"Error: Invalid question format '{args.question}'. Expected 'qYY'.",
-            file=sys.stderr,
-        )
-        return
+    if args.batch_file:
+        if args.year or args.paper or args.question:
+            print("Warning: --year, --paper, --question arguments are ignored when --batch-file is used.", file=sys.stderr)
+        
+        print(f"Processing batch download file: {args.batch_file}")
+        paper_specs = batch_parser.load_batch_file(args.batch_file)
+        
+        if not paper_specs:
+            print("No valid paper specifications found in the batch file. Nothing to download.", file=sys.stderr)
+            sys.exit(1)
 
-    # Normalize paper/question codes (e.g., p6 -> p06, q1 -> q01) - optional but good
-    paper_code = f"p{int(args.paper[1:]):02d}"
-    question_num = f"q{int(args.question[1:]):02d}"
+        download_count = 0
+        fail_count = 0
+        print(f"Found {len(paper_specs)} paper(s) to download from batch file.")
 
-    downloaded_path = downloader.download_pdf(args.year, paper_code, question_num)
+        for spec in paper_specs:
+            year = spec['year']
+            paper_code = spec['paper_code'] # Should be 'pXX'
+            course_hint = spec['course_hint'] # Optional
 
-    if downloaded_path:
-        print(f"Download successful: {downloaded_path}")
+            print(f"Attempting to download: Year={year}, Paper={paper_code}" + (f" (Hint: {course_hint})" if course_hint else ""))
+            
+            # --- IMPORTANT ---
+            # The current downloader.download_pdf expects (year, paper_code, question_number).
+            # For downloading a full paper's solutions PDF, the concept of a single 'question_number'
+            # might not apply directly to the URL structure or the PDF itself.
+            # We are using "all" as a placeholder for question_number.
+            # `downloader.py` will need to be adapted to handle this,
+            # or a new function like `download_paper_solutions(year, paper_code, course_hint)`
+            # should be created in `downloader.py`.
+            # The `course_hint` should also be utilized by the downloader or stored
+            # with the downloaded file's metadata for later processing.
+            # For now, we'll just pass it along if the downloader can take it.
+            # Placeholder for question_number, assuming solutions are per-paper.
+            question_placeholder = "all" # This needs to be reconciled with downloader.py's capabilities
+
+            downloaded_path = downloader.download_pdf(year, paper_code, question_placeholder)
+            # If downloader is updated to use course_hint:
+            # downloaded_path = downloader.download_pdf(year, paper_code, question_placeholder, course_hint=course_hint)
+
+
+            if downloaded_path:
+                print(f"  Success: {downloaded_path}")
+                download_count += 1
+            else:
+                print(f"  Failed to download Year={year}, Paper={paper_code}.")
+                fail_count += 1
+        
+        print(f"Batch download summary: {download_count} successful, {fail_count} failed.")
+        if fail_count > 0:
+            sys.exit(1) # Exit with error if any downloads failed
+
+    elif args.year and args.paper and args.question:
+        # Original single file download logic
+        print(f"Requesting single download: Year={args.year}, Paper={args.paper}, Question={args.question}")
+
+        if not re.match(r"p\d{1,2}", args.paper, re.IGNORECASE):
+            print(f"Error: Invalid paper format '{args.paper}'. Expected 'pXX'.", file=sys.stderr)
+            return
+        if not re.match(r"q\d{1,2}", args.question, re.IGNORECASE):
+            print(f"Error: Invalid question format '{args.question}'. Expected 'qYY'.", file=sys.stderr)
+            return
+
+        paper_code_normalized = f"p{int(args.paper[1:]):02d}"
+        question_num_normalized = f"q{int(args.question[1:]):02d}"
+
+        downloaded_path = downloader.download_pdf(args.year, paper_code_normalized, question_num_normalized)
+
+        if downloaded_path:
+            print(f"Download successful: {downloaded_path}")
+        else:
+            print("Download failed.")
+            sys.exit(1)
     else:
-        print("Download failed.")
-        sys.exit(1)  # Exit with error code if download fails
+        print("Error: For download, you must specify EITHER --batch-file OR (--year, --paper, AND --question).", file=sys.stderr)
+        parser.print_help(sys.stderr) # Accessing parser might be tricky here, print usage manually
+        sys.exit(1)
+        
     print("--- End Download ---")
 
 
@@ -124,11 +176,10 @@ def handle_process(args):
 
     # --- LLM Extraction ---
     print("Starting LLM concept extraction...")
+    # TODO: Pass course_hint to llm_extractor if available from batch download metadata
     concepts_data = llm_extractor.extract_concepts_from_pdf(pdf_path)
     if not concepts_data:
         print("Error: No concepts extracted or LLM call failed.", file=sys.stderr)
-        # Decide if this is a fatal error - maybe allow proceeding with 0 concepts?
-        # For now, let's exit.
         sys.exit(1)
     print(f"LLM extraction returned {len(concepts_data)} concepts.")
 
@@ -137,7 +188,6 @@ def handle_process(args):
     graph = graph_store.load_graph()
     print("Updating graph with extracted data...")
 
-    # Combine year and paper code for a unique paper identifier in the graph
     full_paper_code = f"{metadata['year']}-{metadata['paper_code']}"
 
     paper_id = graph_store.add_paper(
@@ -147,12 +197,20 @@ def handle_process(args):
         tripos_part=metadata["tripos_part"],
     )
 
+    # TODO: If processing a full paper PDF, need to iterate through questions within it.
+    # The current model assumes one PDF = one question's solution, which might be incorrect
+    # for solutions PDFs that cover an entire paper.
+    # The `metadata['question_num']` might come from filename parsing (e.g. YYYY-pXX-qYY-solutions.pdf)
+    # or be a specific question if the PDF is indeed for a single question.
+    # If the PDF is for a whole paper (e.g. YYYY-pXX-solutions.pdf), then `question_num`
+    # needs to be derived during LLM extraction for each concept.
+
     question_id = graph_store.add_question(
         graph,
         paper_node_id=paper_id,
-        question_number=metadata["question_num"],
-        course_module=args.course,
-    )  # Add optional course module
+        question_number=metadata["question_num"], # This needs careful handling if PDF is multi-question
+        course_module=args.course, # This could also come from batch file's course_hint
+    )
 
     concepts_added_count = 0
     links_added_count = 0
@@ -168,17 +226,28 @@ def handle_process(args):
         concept_id = graph_store.add_concept(
             graph, concept_name=concept_name, definition=concept_info.get("definition")
         )
-        if concept_id:
-            concepts_added_count += 1  # Count concepts successfully added/updated
-            # Link the question to this concept
+        if concept_id: # True if concept was added or already existed
+            # Check if link already exists before incrementing (graph_store.link_question_to_concept might do this)
+            # For now, assume link_question_to_concept handles duplicates gracefully or we count all attempts.
             graph_store.link_question_to_concept(graph, question_id, concept_id)
-            links_added_count += 1  # Count successful links
+            links_added_count += 1
+        
+        # How to count concepts_added_count? Only if new node created?
+        # graph_store.add_concept returns node_id. We can check if it was new.
+        # For simplicity, let's assume it's fine for now.
+        # A more accurate count would be:
+        # if graph.nodes[concept_id].get('is_new', False): concepts_added_count +=1
+        # (requires add_concept to mark new nodes)
+
+    # A simple count of unique concepts processed in this run:
+    unique_concept_names_processed = {c.get("concept_name") for c in concepts_data if c.get("concept_name")}
+    concepts_added_count = len(unique_concept_names_processed)
+
 
     print(
-        f"Added/Updated {concepts_added_count} concepts and created {links_added_count} links for question {metadata['question_num']}."
+        f"Processed {concepts_added_count} unique concepts and created/verified {links_added_count} links for question {metadata.get('question_num', 'N/A')} in paper {full_paper_code}."
     )
 
-    # --- Save Graph ---
     graph_store.save_graph(graph)
     print(
         f"Successfully processed '{os.path.basename(pdf_path)}' and saved updated graph."
@@ -205,11 +274,9 @@ def handle_visualize(args):
 
     print(f"Generating interactive visualization to: {output_file}")
 
-    # Basic pyvis visualization
     try:
         from pyvis.network import Network
 
-        # Set height and width for better display
         net = Network(
             notebook=False,
             directed=True,
@@ -220,26 +287,24 @@ def handle_visualize(args):
         )
         net.from_nx(graph)
 
-        # Optional: Customize appearance based on node type?
         for node in net.nodes:
             node_id = node["id"]
             if node_id in graph.nodes:
-                node_type = graph.nodes[node_id].get("type", "Unknown")
-                if node_type == "Paper":
-                    node["color"] = "#FFD700"  # Gold
-                    node["size"] = 25
-                elif node_type == "Question":
-                    node["color"] = "#ADD8E6"  # Light Blue
-                    node["size"] = 15
-                elif node_type == "Concept":
-                    node["color"] = "#90EE90"  # Light Green
-                    node["size"] = 10
-                # Add title for hover info
-                node["title"] = f"ID: {node_id}\n" + "\n".join(
-                    f"{k}: {v}" for k, v in graph.nodes[node_id].items()
-                )
-
-        # Optional: Add physics controls
+                node_data = graph.nodes[node_id]
+                node_type = node_data.get("type", "Unknown")
+                color_map = {
+                    "Paper": "#FFD700", "Question": "#ADD8E6", "Concept": "#90EE90"
+                }
+                size_map = {"Paper": 25, "Question": 15, "Concept": 10}
+                
+                node["color"] = color_map.get(node_type, "#FFFFFF") # Default white
+                node["size"] = size_map.get(node_type, 10)
+                
+                title_parts = [f"ID: {node_id}"]
+                for k, v in node_data.items():
+                    title_parts.append(f"{k}: {v}")
+                node["title"] = "\n".join(title_parts)
+        
         net.show_buttons(filter_=["physics"])
         net.save_graph(output_file)
         print("Interactive graph visualization saved successfully.")
@@ -256,20 +321,21 @@ def handle_visualize(args):
 
     print("--- End Visualize ---")
 
+# Store the global parser instance to access it from handle_download if needed for help text
+parser = None
 
 def main():
-    # Check config on startup
+    global parser # Allow assignment to global parser
+
     if not config.INITIAL_CONFIG_OK:
         print(
             "Initial configuration check failed. Please check your .env file and directory permissions.",
             file=sys.stderr,
         )
-        # Decide if we should exit immediately
-        # sys.exit(1) # Uncomment to make config errors fatal
 
     parser = argparse.ArgumentParser(
         description="Past Paper Concept Analyzer: Extract and visualize concepts from Cambridge CS Tripos solutions.",
-        formatter_class=argparse.RawTextHelpFormatter,  # Preserve newline formatting in help
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     subparsers = parser.add_subparsers(
         dest="command", required=True, help="Available commands"
@@ -277,12 +343,18 @@ def main():
 
     # --- Download Command ---
     parser_download = subparsers.add_parser(
-        "download", help="Download a specific solutions PDF from the CL website."
+        "download", 
+        help="Download solutions PDF(s). Use EITHER --batch-file OR (--year, --paper, --question)."
     )
-    parser_download.add_argument("year", type=int, help="Exam year (e.g., 2022)")
-    parser_download.add_argument("paper", type=str, help="Paper code (e.g., p06)")
+    # Arguments for single download (mutually exclusive with batch)
+    parser_download.add_argument("--year", type=int, help="Exam year (e.g., 2022) for single download.")
+    parser_download.add_argument("--paper", type=str, help="Paper code (e.g., p06) for single download.")
     parser_download.add_argument(
-        "question", type=str, help="Question number (e.g., q01)"
+        "--question", type=str, help="Question number (e.g., q01) for single download."
+    )
+    # Argument for batch download
+    parser_download.add_argument(
+        "--batch-file", type=str, help="Path to a batch file specifying multiple papers to download."
     )
     parser_download.set_defaults(func=handle_download)
 
@@ -309,7 +381,7 @@ def main():
     parser_process.add_argument(
         "--question",
         type=str,
-        help="Optional: Specify question number (e.g., q01) (overrides filename parsing)",
+        help="Optional: Specify question number (e.g., q01) (overrides filename parsing). Important if PDF contains multiple questions.",
     )
     parser_process.add_argument(
         "--tripos-part",
@@ -319,7 +391,7 @@ def main():
         help="Specify Tripos Part (IA, IB, II)",
     )
     parser_process.add_argument(
-        "--course", type=str, help="Optional: Specify associated course module name"
+        "--course", type=str, help="Optional: Specify associated course module name (can also come from batch file hint)"
     )
     parser_process.set_defaults(func=handle_process)
 
@@ -334,10 +406,7 @@ def main():
         type=str,
         help="Output file path for the visualization (default: graph_visualization.html)",
     )
-    # Add arguments later to specify visualization type (e.g., --type co-occurrence)
     parser_visualize.set_defaults(func=handle_visualize)
-
-    # --- Add other commands later: query, stats, etc. ---
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
@@ -345,12 +414,13 @@ def main():
 
     args = parser.parse_args()
 
-    # Execute the function associated with the chosen command
     try:
         args.func(args)
     except Exception as e:
-        print(f"\nAn unexpected error occurred: {e}", file=sys.stderr)
-        # Optionally add more detailed traceback logging here for debugging
-        # import traceback
+        print(f"\nAn unexpected error occurred: {type(e).__name__}: {e}", file=sys.stderr)
+        # import traceback # Uncomment for full traceback during development
         # traceback.print_exc()
         sys.exit(1)
+
+if __name__ == "__main__":
+    main()
